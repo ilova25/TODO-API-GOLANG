@@ -9,6 +9,7 @@ Project ini dibuat sebagai **Tes PKL**.
 - Get Detail Todo
 - Update Todo
 - Delete Todo
+- Penyimpanan data menggunakan MySQL
 - Response JSON
 - HTTP Status Code sesuai standar
 - Struktur project rapi
@@ -16,7 +17,22 @@ Project ini dibuat sebagai **Tes PKL**.
 ## 🛠️ Teknologi
 - Golang
 - net/http
+- MySQL
+- go-sql-driver/mysql
 - JSON
+
+## Setup Database MySQL
+CREATE DATABASE todo_db;
+USE todo_db;
+
+CREATE TABLE todos (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  status ENUM('pending','done') DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 
 ## ▶️ Cara Menjalankan Project
 
@@ -36,6 +52,8 @@ http://localhost:8080
 todo-api-golang
 │── main.go
 │── go.mod
+├── config
+│   └── db.go
 ├── handlers
 │   └── todo_handler.go
 ├── models
@@ -44,6 +62,7 @@ todo-api-golang
 │   └── routes.go
 └── utils
     └── response.go
+
 
 ## 📌 Struktur Data Todo
 {
