@@ -4,89 +4,152 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"time"
 
+	"todo-api-golang/config"
 	"todo-api-golang/models"
 	"todo-api-golang/utils"
 )
 
-var todos []models.Todo
-var idCounter = 1
 
-// CREATE TODO
+// ================= CREATE TODO =================
 func CreateTodo(w http.ResponseWriter, r *http.Request) {
 	var todo models.Todo
 	json.NewDecoder(r.Body).Decode(&todo)
 
-	todo.ID = idCounter
-	todo.Status = "pending"
-	todo.CreatedAt = time.Now()
+	query := "INSERT INTO todos (title, description) VALUES (?, ?)"
+	result, err := config.DB.Exec(query, todo.Title, todo.Description)
+	if err != nil {
+		utils.JSONResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	idCounter++
-	todos = append(todos, todo)
+	id, _ := result.LastInsertId()
+	todo.ID = int(id)
+	todo.Status = "pending"
 
 	utils.JSONResponse(w, http.StatusCreated, todo)
 }
 
-// GET LIST TODO
+
+// ================= GET LIST TODO =================
 func GetTodos(w http.ResponseWriter, r *http.Request) {
+	rows, err := config.DB.Query(
+		"SELECT id, title, description, status, created_at FROM todos",
+	)
+	if err != nil {
+		utils.JSONResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer rows.Close()
+
+	var todos []models.Todo
+
+	for rows.Next() {
+		var todo models.Todo
+		rows.Scan(
+			&todo.ID,
+			&todo.Title,
+			&todo.Description,
+			&todo.Status,
+			&todo.CreatedAt,
+		)
+		todos = append(todos, todo)
+	}
+
 	utils.JSONResponse(w, http.StatusOK, todos)
 }
 
-// GET DETAIL TODO
+
+// ================= GET DETAIL TODO =================
 func GetTodoByID(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Query().Get("id")
 	id, _ := strconv.Atoi(idStr)
 
-	for _, todo := range todos {
-		if todo.ID == id {
-			utils.JSONResponse(w, http.StatusOK, todo)
-			return
-		}
+	var todo models.Todo
+	err := config.DB.QueryRow(
+		"SELECT id, title, description, status, created_at FROM todos WHERE id = ?",
+		id,
+	).Scan(
+		&todo.ID,
+		&todo.Title,
+		&todo.Description,
+		&todo.Status,
+		&todo.CreatedAt,
+	)
+
+	if err != nil {
+		utils.JSONResponse(w, http.StatusNotFound, map[string]string{
+			"message": "Todo not found",
+		})
+		return
 	}
-	utils.JSONResponse(w, http.StatusNotFound, map[string]string{
-		"message": "Todo not found",
-	})
+
+	utils.JSONResponse(w, http.StatusOK, todo)
 }
 
-// UPDATE TODO
+
+// ================= UPDATE TODO =================
 func UpdateTodo(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Query().Get("id")
 	id, _ := strconv.Atoi(idStr)
 
-	var updatedTodo models.Todo
-	json.NewDecoder(r.Body).Decode(&updatedTodo)
+	var todo models.Todo
+	json.NewDecoder(r.Body).Decode(&todo)
 
-	for i, todo := range todos {
-		if todo.ID == id {
-			todos[i].Title = updatedTodo.Title
-			todos[i].Description = updatedTodo.Description
-			todos[i].Status = updatedTodo.Status
+	query := `
+		UPDATE todos 
+		SET title = ?, description = ?, status = ?
+		WHERE id = ?
+	`
 
-			utils.JSONResponse(w, http.StatusOK, todos[i])
-			return
-		}
+	result, err := config.DB.Exec(
+		query,
+		todo.Title,
+		todo.Description,
+		todo.Status,
+		id,
+	)
+	if err != nil {
+		utils.JSONResponse(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	utils.JSONResponse(w, http.StatusNotFound, map[string]string{
-		"message": "Todo not found",
-	})
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		utils.JSONResponse(w, http.StatusNotFound, map[string]string{
+			"message": "Todo not found",
+		})
+		return
+	}
+
+	todo.ID = id
+	utils.JSONResponse(w, http.StatusOK, todo)
 }
 
-// DELETE TODO
+
+// ================= DELETE TODO =================
 func DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Query().Get("id")
 	id, _ := strconv.Atoi(idStr)
 
-	for i, todo := range todos {
-		if todo.ID == id {
-			todos = append(todos[:i], todos[i+1:]...)
-			utils.JSONResponse(w, http.StatusOK, map[string]string{
-				"message": "Todo deleted",
-			})
-			return
-		}
+	result, err := config.DB.Exec(
+		"DELETE FROM todos WHERE id = ?",
+		id,
+	)
+	if err != nil {
+		utils.JSONResponse(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	utils.JSONResponse(w, http.StatusNotFound, map[string]string{
-		"message": "Todo not found",
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		utils.JSONResponse(w, http.StatusNotFound, map[string]string{
+			"message": "Todo not found",
+		})
+		return
+	}
+
+	utils.JSONResponse(w, http.StatusOK, map[string]string{
+		"message": "Todo deleted",
 	})
 }
